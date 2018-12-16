@@ -3,6 +3,7 @@
 
 module Lib where
 
+import Data.List (sort, sortOn)
 import Data.Map.Strict (Map)
 import Text.Parsec
 import Text.Parsec.String (parseFromFile)
@@ -117,3 +118,121 @@ data Claim = Claim
   , width :: Int
   , height :: Int
   } deriving (Eq, Show)
+
+day4part1 :: IO ()
+day4part1 = do
+  (Right records) <- parseFromFile (patrolRecParser `endBy` newline) "data/day4-input.txt"
+  let (Right naps) = parse guardAsleepParser "" (sort records)
+  let napTimesPerGuard = foldl (\reg nap -> Map.insertWith (+) (guardId nap) (duration nap) reg) mempty naps
+  let chiefNapper = fst $ last $ sortOn snd $ Map.toList napTimesPerGuard
+  let chiefNaps = filter ((==) chiefNapper . guardId) naps
+  let napHistogram = foldl insertNaps mempty chiefNaps
+  let mostNappedMinute = fst $ last $ sortOn snd $ Map.toList $ fmap length napHistogram
+  putStrLn $ show $ chiefNapper * mostNappedMinute
+
+insertNaps :: Map Int [Nap] -> Nap -> Map Int [Nap]
+insertNaps histogram nap =
+  foldl
+    (\h t -> Map.insertWith (<>) t [nap] h)
+    histogram
+    [(minutes $ from nap)..((minutes $ to nap) - 1)]
+
+
+patrolRecParser :: Parsec String () PatrolRec
+patrolRecParser = do
+  string "[1518-"
+  months <- intParser
+  char '-'
+  days <- intParser
+  space
+  hours <- intParser
+  char ':'
+  minutes <- intParser
+  char ']'
+  space
+  action <- guardActionParser
+  let timestamp = Timestamp { months, days, hours, minutes }
+  pure PatrolRec { timestamp, action }
+
+guardActionParser :: Parsec String () GuardAction
+guardActionParser =
+  choice
+    [ fmap BeginShift $ string "Guard #" *> intParser <* string " begins shift"
+    , pure FallsAsleep <* string "falls asleep"
+    , pure WakesUp <* string "wakes up"
+    ]
+
+guardAsleepParser :: Parsec [PatrolRec] () [Nap]
+guardAsleepParser = fmap join $ many $ do
+  id' <- beginShift
+  many $ Nap id' <$> fallsAsleep <*> wakesUp
+
+
+beginShift :: Parsec [PatrolRec] () Int
+beginShift =
+  tokenPrim show incSrcLine $ \rec ->
+    case action rec of
+      BeginShift id' -> Just id'
+      _ -> Nothing
+
+fallsAsleep :: Parsec [PatrolRec] () Timestamp
+fallsAsleep =
+  tokenPrim show incSrcLine $ \rec ->
+    case action rec of
+      FallsAsleep -> Just (timestamp rec)
+      _ -> Nothing
+
+wakesUp :: Parsec [PatrolRec] () Timestamp
+wakesUp =
+  tokenPrim show incSrcLine $ \rec ->
+    case action rec of
+      WakesUp -> Just (timestamp rec)
+      _ -> Nothing
+
+incSrcLine :: SourcePos -> t -> s -> SourcePos
+incSrcLine pos _ _ = setSourceLine pos (1 + sourceLine pos)
+
+data PatrolRec =
+  PatrolRec
+    { timestamp :: Timestamp
+    , action :: GuardAction
+    } deriving (Eq, Ord, Show)
+
+data Timestamp = Timestamp
+    { months :: Int
+    , days :: Int
+    , hours :: Int
+    , minutes :: Int
+    } deriving (Eq, Ord, Show)
+
+printTimestamp :: Timestamp -> String
+printTimestamp Timestamp { months, days, hours, minutes } =
+  mconcat
+    [ "["
+    , show months
+    , "-"
+    , show days
+    , "] "
+    , show hours
+    , ":"
+    , show minutes
+    ]
+
+data GuardAction
+  = BeginShift Int
+  | FallsAsleep
+  | WakesUp
+  deriving (Eq, Ord, Show)
+
+data Nap = Nap
+  { guardId :: Int
+  , from :: Timestamp
+  , to :: Timestamp
+  } deriving (Show)
+
+duration :: Nap -> Int
+duration Nap { to, from } =
+  toMinutes to - toMinutes from
+
+toMinutes :: Timestamp -> Int
+toMinutes Timestamp { months, days, hours, minutes } = minutes + 60 * (hours + 24 * (days + 30 * months))
