@@ -130,6 +130,14 @@ day4part1 = do
   let mostNappedMinute = fst $ last $ sortOn snd $ Map.toList $ fmap length napHistogram
   putStrLn $ show $ chiefNapper * mostNappedMinute
 
+day4part2 :: IO ()
+day4part2 = do
+  (Right records) <- parseFromFile (patrolRecParser `endBy` newline) "data/day4-input.txt"
+  let (Right naps) = parse guardAsleepParser "" (sort records)
+  let napTimesPerGuard = foldl insertNapsPerGuard mempty naps
+  let (GuardNapped { guardId', nappedMinute }) = fst $ last $ sortOn snd $ Map.toList napTimesPerGuard
+  putStrLn $ show $ guardId' * nappedMinute
+
 insertNaps :: Map Int [Nap] -> Nap -> Map Int [Nap]
 insertNaps histogram nap =
   foldl
@@ -137,6 +145,18 @@ insertNaps histogram nap =
     histogram
     [(minutes $ from nap)..((minutes $ to nap) - 1)]
 
+insertNapsPerGuard :: Map GuardNapped Int -> Nap -> Map GuardNapped Int
+insertNapsPerGuard histogram nap =
+  foldl
+    (\h t -> Map.insertWith (+) (GuardNapped (guardId nap) t) 1 h)
+    histogram
+    [(minutes $ from nap)..((minutes $ to nap) - 1)]
+
+data GuardNapped =
+  GuardNapped
+    { guardId' :: Int
+    , nappedMinute :: Int
+    } deriving (Eq, Ord, Show)
 
 patrolRecParser :: Parsec String () PatrolRec
 patrolRecParser = do
