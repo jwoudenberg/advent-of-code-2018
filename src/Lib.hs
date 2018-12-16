@@ -3,6 +3,7 @@
 
 module Lib where
 
+import Data.Char (toUpper, isUpper, isAlpha, toLower)
 import Data.List (sort, sortOn)
 import Data.Map.Strict (Map)
 import Text.Parsec
@@ -256,3 +257,28 @@ duration Nap { to, from } =
 
 toMinutes :: Timestamp -> Int
 toMinutes Timestamp { months, days, hours, minutes } = minutes + 60 * (hours + 24 * (days + 30 * months))
+
+day5part1 :: IO ()
+day5part1 = do
+  polymer <- filter isAlpha <$> readFile "data/day5-input.txt"
+  putStrLn $ show $ length $ react [] polymer
+
+day5part2 :: IO ()
+day5part2 = do
+  polymer <- filter isAlpha <$> readFile "data/day5-input.txt"
+  let shortened = zipWith shortenWith ['a'..'z'] (repeat polymer)
+  putStrLn $ show $ snd $ head $ sortOn snd shortened
+
+shortenWith :: Char -> String -> (Char, Int)
+shortenWith letter = (,) letter . length . react [] . filter (not . (== letter) . toLower)
+
+react :: String -> String -> String
+react xs       []       = reverse xs
+react []       (y : ys) = react [y] ys
+react (x : xs) (y : ys) = if x == switchCase y
+                            then react xs ys
+                            else react (y : x : xs) ys
+
+switchCase :: Char -> Char
+switchCase c =
+  if isUpper c then toLower c else toUpper c
