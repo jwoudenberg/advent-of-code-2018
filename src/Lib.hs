@@ -282,3 +282,40 @@ react (x : xs) (y : ys) = if x == switchCase y
 switchCase :: Char -> Char
 switchCase c =
   if isUpper c then toLower c else toUpper c
+
+day6part1 :: IO ()
+day6part1 = do
+  (Right coords) <- parseFromFile (coordParser `endBy` newline) "data/day6-input.txt"
+  let lowestX = minimum $ fst <$> coords
+  let highestX = maximum $ fst <$> coords
+  let lowestY = minimum $ snd <$> coords
+  let highestY = maximum $ snd <$> coords
+  let region = [(x, y) | x <- [lowestX..highestX], y <- [lowestY..highestY]]
+  let regionFilled = zip region (nearestTo coords <$> region)
+  let onBorder = \(x, y) -> x == lowestX || x == highestX || y == lowestY || y == highestY
+  let infiniteRegions = catMaybes $ nub $ fmap snd $ filter (onBorder . fst) regionFilled
+  let validRegion = maybe False (not . (`elem` infiniteRegions))
+  let largestRegion = last $ filter (validRegion . fst) $ sortOn snd $ Map.toList $  foldl incsert mempty $ fmap snd regionFilled
+  putStrLn $ show $ largestRegion
+
+type Coord = (Int, Int)
+
+nearestTo :: [Coord] -> Coord ->  (Maybe Coord)
+nearestTo targets coord =
+  let distances = zip targets (manhatten coord <$> targets)
+  in
+  case sortOn snd distances of
+    ((x, distX) : (y, distY) : _) ->
+      if distX /= distY
+        then Just x
+        else Nothing
+
+incsert :: Ord k => Map k Int -> k -> Map k Int
+incsert xs key =
+  Map.insertWith (+) key 1 xs
+
+manhatten :: Coord -> Coord -> Int
+manhatten (x1, y1) (x2, y2) = abs (x2 - x1) + abs (y2 -y1)
+
+coordParser :: Parsec String () Coord
+coordParser = (,) <$> intParser <* string ", " <*> intParser
